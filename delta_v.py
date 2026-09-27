@@ -2,8 +2,9 @@
 """
 Simple NTP bolt-on abort stage delta-v calculator (SI units).
 
-Calculates ideal delta-v, mass flow rate, burn time, and
-initial/final acceleration for a bolt-on NTP stage.
+Calculates ideal delta-v, mass flow rate, burn time,
+initial/final acceleration, and propulsive power for
+a bolt-on NTP stage.
 """
 
 import math
@@ -20,7 +21,8 @@ def delta_v(isp_s: float,
             thrust_N: float,
             residual_fraction: float = 0.0) -> dict:
     """
-    Compute ideal delta-v for a bolt-on NTP abort stage.
+    Compute ideal delta-v and basic performance parameters
+    for a bolt-on NTP abort stage.
 
     Parameters
     ----------
@@ -64,11 +66,14 @@ def delta_v(isp_s: float,
             "Invalid masses: final mass must be less than initial mass"
         )
 
+    # Effective exhaust velocity
+    exhaust_velocity_m_s = G0 * isp_s
+
     # Ideal rocket equation
-    dv = isp_s * G0 * math.log(m0 / mf)
+    dv = exhaust_velocity_m_s * math.log(m0 / mf)
 
     # Mass flow rate
-    m_dot = thrust_N / (isp_s * G0)
+    m_dot = thrust_N / exhaust_velocity_m_s
 
     # Burn time
     burn_time_s = m_prop_usable / m_dot
@@ -79,6 +84,11 @@ def delta_v(isp_s: float,
 
     acceleration_initial_g = acceleration_initial_m_s2 / G0
     acceleration_final_g = acceleration_final_m_s2 / G0
+
+    # Propulsive power
+    # P = 0.5 * thrust * effective exhaust velocity
+    power_W = 0.5 * thrust_N * exhaust_velocity_m_s
+    power_MW = power_W / 1.0e6
 
     return {
         "delta_v_m_s": dv,
@@ -91,6 +101,9 @@ def delta_v(isp_s: float,
         "thrust_N": thrust_N,
         "m_dot_kg_s": m_dot,
         "burn_time_s": burn_time_s,
+        "exhaust_velocity_m_s": exhaust_velocity_m_s,
+        "power_W": power_W,
+        "power_MW": power_MW,
         "acceleration_initial_m_s2": acceleration_initial_m_s2,
         "acceleration_final_m_s2": acceleration_final_m_s2,
         "acceleration_initial_g": acceleration_initial_g,
@@ -105,7 +118,7 @@ def delta_v(isp_s: float,
 if __name__ == "__main__":
 
     # Representative post-TMI mass of the remaining crewed stack
-    # (habitat + residual main propulsion + systems). Sweep this value.
+    # (habitat + residual main propulsion + systems)
     m_sc = 180000.0          # kg   (~180 t)
 
     # Example bolt-on NTP abort stage
@@ -128,6 +141,7 @@ if __name__ == "__main__":
     print(f"Abort propellant load        : {m_prop/1000:8.1f} t")
     print(f"Isp                          : {isp:8.1f} s")
     print(f"Thrust                       : {thrust/1000:8.1f} kN")
+    print(f"Effective exhaust velocity   : {results['exhaust_velocity_m_s']:8.1f} m/s")
     print(f"Initial stack mass           : {results['m0_kg']/1000:8.1f} t")
     print(f"Final stack mass             : {results['mf_kg']/1000:8.1f} t")
     print(f"Mass ratio                   : {results['mass_ratio']:8.3f}")
@@ -139,3 +153,5 @@ if __name__ == "__main__":
     print(f"                             : {results['acceleration_initial_g']:8.3f} g")
     print(f"Final acceleration           : {results['acceleration_final_m_s2']:8.3f} m/s²")
     print(f"                             : {results['acceleration_final_g']:8.3f} g")
+    print(f"Propulsive power             : {results['power_MW']:8.2f} MW")
+    print(f"                             : {results['power_W']:8.3e} W")
