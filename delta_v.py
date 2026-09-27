@@ -19,7 +19,7 @@ def delta_v(isp_s: float,
             m_stage_dry: float,
             m_propellant: float,
             thrust_N: float,
-            residual_fraction: float = 0.0) -> dict:
+            residual_fraction: float = 0.02) -> dict:
     """
     Compute ideal delta-v and basic performance parameters
     for a bolt-on NTP abort stage.
@@ -54,10 +54,10 @@ def delta_v(isp_s: float,
     """
 
     # Calculate residual and usable propellant
-    m_residuals = m_propellant * residual_fraction
+    m_residuals   = m_propellant * residual_fraction
     m_prop_usable = m_propellant - m_residuals
 
-    # Initial and final mass of the combined stack
+    # Initial and final mass of the total spacecraft
     m0 = m_spacecraft + m_stage_dry + m_propellant
     mf = m_spacecraft + m_stage_dry + m_residuals
 
@@ -80,14 +80,14 @@ def delta_v(isp_s: float,
 
     # Initial and final acceleration
     acceleration_initial_m_s2 = thrust_N / m0
-    acceleration_final_m_s2 = thrust_N / mf
+    acceleration_final_m_s2   = thrust_N / mf
 
     acceleration_initial_g = acceleration_initial_m_s2 / G0
-    acceleration_final_g = acceleration_final_m_s2 / G0
+    acceleration_final_g   = acceleration_final_m_s2 / G0
 
     # Propulsive power
     # P = 0.5 * thrust * effective exhaust velocity
-    power_W = 0.5 * thrust_N * exhaust_velocity_m_s
+    power_W  = 0.5 * thrust_N * exhaust_velocity_m_s
     power_MW = power_W / 1.0e6
 
     return {
@@ -112,20 +112,20 @@ def delta_v(isp_s: float,
 
 
 # ----------------------------------------------------------------------
-# Example usage with representative DRA 5.0-class numbers
+# Main Program: using NASA DRA 5.0-class numbers
 # ----------------------------------------------------------------------
 
 if __name__ == "__main__":
 
-    # Representative post-TMI mass of the remaining crewed stack
-    # (habitat + residual main propulsion + systems)
+    # Representative post-TMI mass of crewed spacecraft
+    # (habitat + main propulsion + systems)
     m_sc = 180000.0          # kg   (~180 t)
 
     # Example bolt-on NTP abort stage
-    isp = 900.0              # s
+    isp         = 900.0      # s
     m_stage_dry = 4000.0     # kg   (engine + tanks + structure, dry)
-    m_prop = 25000.0         # kg   (LH2 load)
-    thrust = 111200.0        # N    (~25 klbf)
+    m_prop      = 25000.0    # kg   (LH2 load)
+    thrust      = 111200.0   # N    (~25 klbf)
 
     results = delta_v(
         isp,
@@ -142,8 +142,8 @@ if __name__ == "__main__":
     print(f"Isp                          : {isp:8.1f} s")
     print(f"Thrust                       : {thrust/1000:8.1f} kN")
     print(f"Effective exhaust velocity   : {results['exhaust_velocity_m_s']:8.1f} m/s")
-    print(f"Initial stack mass           : {results['m0_kg']/1000:8.1f} t")
-    print(f"Final stack mass             : {results['mf_kg']/1000:8.1f} t")
+    print(f"Initial total mass           : {results['m0_kg']/1000:8.1f} t")
+    print(f"Final total mass             : {results['mf_kg']/1000:8.1f} t")
     print(f"Mass ratio                   : {results['mass_ratio']:8.3f}")
     print(f"Ideal delta-v                : {results['delta_v_km_s']:8.3f} km/s")
     print(f"                             : {results['delta_v_m_s']:8.0f} m/s")
