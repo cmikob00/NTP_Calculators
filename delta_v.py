@@ -1,25 +1,45 @@
 #!/usr/bin/env python3
-"""
-Simple NTP bolt-on abort stage delta-v calculator (SI units).
 
-Calculates ideal delta-v, mass flow rate, burn time,
-initial/final acceleration, and propulsive (jet) power for
-a bolt-on NTP stage.
+"""
+Post-TMI abort delta-v calculator for NASA DRA 5.0 NTR crewed vehicle
+plus a dedicated bolt-on NTP abort stage (SI units).
+
+Propulsion groups
+-----------------
+  "dra": 3 x 25 klbf Pewee-class engines on the DRA 5.0 core stage,
+         fed by the LH2 still in the core stage after TMI.
+  "ded": 1 x 25 klbf dedicated abort-stage engine, fed by its own tank.
+
+Abort modes (all post-TMI; the DRA drop tank is already jettisoned)
+-------------------------------------------------------------------
+  "dedicated"  : dedicated engine only; DRA vehicle (and its remaining
+                 LH2) is carried as dead mass.
+  "dra"        : DRA 3 engines only, no dedicated stage (baseline).
+  "sequential" : dedicated engine burns to depletion, the empty stage is
+                 jettisoned, then the DRA engines burn.
+  "all_four"   : all 4 engines fire together; each group shuts down when
+                 its own tank is empty (no propellant cross-feed).
 
 SOURCES (NASA Mars DRA 5.0 NTR numbers)
 ---------------------------------------
 [1] Borowski, McCurdy, Packard, "7-Launch NTR Space Transportation
-    System for NASA's Mars Design Reference Architecture (DRA) 5.0."
-    NTRS 20120003776 (also AIAA 2009-5308).
-    Engine performance, crewed vehicle ("Copernicus") masses.
-[2] Borowski et al., "Nuclear Thermal Rocket/Vehicle Characteristics and
-    Sensitivity Trades for NASA's Mars DRA 5.0 Study."
-    NTRS 20120012928.  Engine and stage characteristics, LH2 flow rate.
-[3] Borowski et al., "Conventional and Bimodal Nuclear Thermal Rocket
-    (NTR) Propulsion for Mars ..."  NTRS 20140017461.
-    Reference 25 klbf Pewee-class engine used in DRA 5.0.
-[4] Primary reference: NASA-SP-2009-566, "Human
-    Exploration of Mars Design Reference Architecture 5.0," and
+    System for NASA's Mars Design Reference Architecture (DRA) 5.0,"
+    AIAA 2009-5308.  Three 25 klbf engines on the core stage; Isp ~900 s;
+    LH2 flow ~12.6 kg/s/engine; engine T/W ~3.43; cooldown propellant
+    margin 3 % of usable LH2.
+[2] NTRS 20120003776 (NASA version of the 7-Launch paper).  Drop tank
+    ~22 t dry / ~102.4 t LH2, jettisoned after TMI.
+[3] NTRS 20120009207 (DRA 5.0 NTR crewed-vehicle paper).
+    Crewed vehicle: NTR stage ~138.1 t, saddle truss +
+    drop tank ~133.4 t, ~178.4 t total LH2, 4 primary burns; engine burn
+    times ~55 min TMI / ~14.5 min MOC / ~9.7 min TEI (~79.2 min total);
+    ~2 hr accumulated engine burn time demonstrated.
+[4] NTRS 20120012928, "Nuclear Thermal Rocket/Vehicle Characteristics and
+    Sensitivity Trades for NASA's Mars DRA 5.0 Study."  Alternate
+    configurations (e.g. ~180 t LH2, ~80 min total burn); shows
+    variation between DRA 5.0 papers.
+[P] Primary reference: NASA-SP-2009-566, "Human Exploration of Mars
+    Design Reference Architecture 5.0," and its
     Addendum (NASA/SP-2009-566-ADD).
 """
 
@@ -32,182 +52,285 @@ G0 = 9.80665  # m/s^2
 # Pounds-force to newtons
 LBF_TO_N = 4.4482216
 
+MODES = ("dedicated", "dra", "sequential", "all_four")
 
-def delta_v(isp_s: float,
-            m_spacecraft: float,
-            m_stage_dry: float,
-            m_propellant: float,
-            thrust_N: float,
-            residual_fraction: float = 0.02) -> dict:
+# Order in which propulsion groups fire in each mode. A step lists the
+# groups that fire together; each step runs until the first active
+# group's usable propellant is exhausted. "JETTISON" drops the empty
+# dedicated stage.
+_STEPS = {
+    "dedicated":  [["ded"]],
+    "dra":        [["dra"]],
+    "sequential": [["ded"], ["JETTISON"], ["dra"]],
+    "all_four":   [["dra", "ded"], ["dra", "ded"]],  # 2nd step: survivor
+}
+
+
+def run_abort_burn(mode: str,
+                   isp_s: float,
+                   m_dra_vehicle: float,
+                   dra_core_lh2: float,
+                   m_ded_dry: float,
+                   m_ded_prop: float,
+                   thrust_per_engine_N: float = 25000.0 * LBF_TO_N,
+                   n_dra_engines: int = 3,
+                   n_ded_engines: int = 1,
+                   dra_reserve_fraction: float = 0.05,
+                   ded_reserve_fraction: float = 0.02,
+                   tmi_burn_min_per_dra_engine: float = 55.0,
+                   engine_life_limit_min: float = 120.0) -> dict:
     
     """
-    Compute ideal delta-v and basic performance parameters
-    for a bolt-on NTP abort stage.
+    Compute ideal (impulsive) delta-v for a post-TMI abort.
 
     Parameters
     ----------
+    mode : str
+        One of MODES (see module docstring).
+
     isp_s : float
-        Specific impulse [s]
+        Specific impulse [s] (same for all engines).
 
-    m_spacecraft : float
-        Mass of the main DRA-class vehicle at abort initiation
-        (excluding the abort stage) [kg]
+    m_dra_vehicle : float
+        Total mass of the DRA vehicle at abort initiation (post-TMI,
+        drop tank gone), including the LH2 still in its core stage, but
+        EXCLUDING the dedicated abort stage [kg]
 
-    m_stage_dry : float
-        Dry mass of the abort NTP stage, including engine,
-        structure, and empty tanks [kg]
+    dra_core_lh2 : float
+        LH2 remaining in the DRA core stage at abort initiation [kg]
+        (after TMI this is the propellant that MOC and TEI would use)
 
-    m_propellant : float
-        Loaded propellant of the abort stage [kg]
+    m_ded_dry : float
+        Dry mass of the dedicated stage (engine, tank, structure) [kg]
 
-    thrust_N : float
-        Thrust of the NTP system [N]
+    m_ded_prop : float
+        Loaded LH2 in the dedicated stage [kg]
 
-    residual_fraction : float
-        Fraction of loaded propellant left unused as residuals
-        (default 0.02 = 2 %). NOTE: DRA 5.0 also carries cooldown
-        ("post-burn") propellant and performance reserves [1][2];
-        check ground-rules table for the actual percentages and
-        fold them in here if needed.
+    thrust_per_engine_N : float
+        Thrust of each engine [N] (default 25 klbf)
+
+    n_dra_engines, n_ded_engines : int
+        Engine counts (DRA 5.0 core stage: 3; dedicated stage: 1)
+
+    dra_reserve_fraction : float
+        Fraction of core-stage LH2 not burned (cooldown, reserve,
+        trapped residuals). DRA 5.0 carries a 3 % cooldown margin [1]
+        plus performance reserve and residuals [3]; the extra ~2 % here
+        is an ESTIMATE. Verify against [P].
+
+    ded_reserve_fraction : float
+        Same for the dedicated stage (default 2 %, as in the original
+        script). Cooldown would also apply to a real NTR; raise this
+        toward 0.05 for consistency with the DRA core stage.
+
+    tmi_burn_min_per_dra_engine : float
+        Engine time already used by each DRA engine at abort start
+        [min]; ~55 min for TMI [3].
+
+    engine_life_limit_min : float
+        Accumulated burn-time limit per engine [min]; ~2 hr
+        demonstrated on the ground [3].
 
     Returns
     -------
-    dict
-        Calculated performance results
+    dict with total delta-v, per-phase breakdown, and engine-life check
     """
 
-    # Calculate residual and usable propellant
-    m_residuals   = m_propellant * residual_fraction
-    m_prop_usable = m_propellant - m_residuals
+    if mode not in MODES:
+        raise ValueError(f"mode must be one of {MODES}")
 
-    # Initial and final mass of the total spacecraft
-    m0 = m_spacecraft + m_stage_dry + m_propellant
-    mf = m_spacecraft + m_stage_dry + m_residuals
+    ve = G0 * isp_s                       # effective exhaust velocity
+    mdot_eng = thrust_per_engine_N / ve   # kg/s per engine
 
-    if mf >= m0 or m_prop_usable <= 0:
-        raise ValueError(
-            "Invalid masses: final mass must be less than initial mass"
-        )
+    groups = {
+        "dra": {
+            "n": n_dra_engines,
+            "thrust": n_dra_engines * thrust_per_engine_N,
+            "mdot": n_dra_engines * mdot_eng,
+            "prop": dra_core_lh2 * (1.0 - dra_reserve_fraction),
+        },
+        "ded": {
+            "n": n_ded_engines,
+            "thrust": n_ded_engines * thrust_per_engine_N,
+            "mdot": n_ded_engines * mdot_eng,
+            "prop": m_ded_prop * (1.0 - ded_reserve_fraction),
+        },
+    }
 
-    # Effective exhaust velocity
-    exhaust_velocity_m_s = G0 * isp_s
+    # Mass carried and which groups are allowed to fire in this mode
+    if mode == "dra":
+        m = m_dra_vehicle                       # no dedicated stage
+        groups["ded"]["prop"] = 0.0
+        ded_inert = 0.0
+    else:
+        m = m_dra_vehicle + m_ded_dry + m_ded_prop
+        ded_inert = m_ded_dry + m_ded_prop * ded_reserve_fraction
+    if mode == "dedicated":
+        groups["dra"]["prop"] = 0.0             # DRA engines stay idle
 
-    # Ideal rocket equation
-    # (impulsive; ignores gravity/finite-burn losses, which matter for a
-    #  ~0.05 g single-engine stage)
-    dv = exhaust_velocity_m_s * math.log(m0 / mf)
+    m0_total = m
+    engine_min = {"dra": tmi_burn_min_per_dra_engine, "ded": 0.0}
+    ded_attached = mode != "dra"
+    phases = []
+    total_dv = 0.0
+    total_time = 0.0
 
-    # Mass flow rate
-    m_dot = thrust_N / exhaust_velocity_m_s
+    for step in _STEPS[mode]:
+        if step == ["JETTISON"]:
+            if ded_attached:
+                m -= ded_inert                  # drop the empty stage
+                ded_attached = False
+            continue
 
-    # Burn time
-    burn_time_s = m_prop_usable / m_dot
+        active = [g for g in step if groups[g]["prop"] > 1e-9]
+        if not active:
+            continue
 
-    # Initial and final acceleration
-    acceleration_initial_m_s2 = thrust_N / m0
-    acceleration_final_m_s2   = thrust_N / mf
+        thrust = sum(groups[g]["thrust"] for g in active)
+        mdot = sum(groups[g]["mdot"] for g in active)
+        dt = min(groups[g]["prop"] / groups[g]["mdot"] for g in active)
+        burned = mdot * dt
 
-    acceleration_initial_g = acceleration_initial_m_s2 / G0
-    acceleration_final_g   = acceleration_final_m_s2 / G0
+        m_start = m
+        m_end = m - burned
+        dv = ve * math.log(m_start / m_end)
 
-    # Propulsive (jet) power, not reactor thermal power
-    # P = 0.5 * thrust * effective exhaust velocity
-    power_W  = 0.5 * thrust_N * exhaust_velocity_m_s
-    power_MW = power_W / 1.0e6
+        for g in active:
+            groups[g]["prop"] -= groups[g]["mdot"] * dt
+            engine_min[g] += dt / 60.0
+
+        phases.append({
+            "engines": "+".join(active),
+            "n_engines": sum(groups[g]["n"] for g in active),
+            "thrust_N": thrust,
+            "burn_time_s": dt,
+            "propellant_burned_kg": burned,
+            "m_start_kg": m_start,
+            "m_end_kg": m_end,
+            "delta_v_m_s": dv,
+            "accel_start_g": thrust / m_start / G0,
+            "accel_end_g": thrust / m_end / G0,
+            "jet_power_MW": 0.5 * thrust * ve / 1.0e6,
+        })
+
+        m = m_end
+        total_dv += dv
+        total_time += dt
+
+    used = {"dra": mode in ("dra", "sequential", "all_four"),
+            "ded": mode in ("dedicated", "sequential", "all_four")}
+    life_ok = all(engine_min[g] <= engine_life_limit_min
+                  for g in ("dra", "ded") if used[g])
 
     return {
-        "delta_v_m_s": dv,
-        "delta_v_km_s": dv / 1000.0,
-        "m0_kg": m0,
-        "mf_kg": mf,
-        "mass_ratio": m0 / mf,
-        "usable_propellant_kg": m_prop_usable,
-        "residuals_kg": m_residuals,
-        "thrust_N": thrust_N,
-        "m_dot_kg_s": m_dot,
-        "burn_time_s": burn_time_s,
-        "exhaust_velocity_m_s": exhaust_velocity_m_s,
-        "power_W": power_W,
-        "power_MW": power_MW,
-        "acceleration_initial_m_s2": acceleration_initial_m_s2,
-        "acceleration_final_m_s2": acceleration_final_m_s2,
-        "acceleration_initial_g": acceleration_initial_g,
-        "acceleration_final_g": acceleration_final_g,
+        "mode": mode,
+        "delta_v_m_s": total_dv,
+        "delta_v_km_s": total_dv / 1000.0,
+        "m0_kg": m0_total,
+        "mf_kg": m,
+        "total_burn_time_s": total_time,
+        "exhaust_velocity_m_s": ve,
+        "mdot_per_engine_kg_s": mdot_eng,
+        "phases": phases,
+        "engine_minutes": engine_min,
+        "engine_life_limit_min": engine_life_limit_min,
+        "within_engine_life": life_ok,
     }
 
 
+def print_result(r: dict) -> None:
+    print(f"--- Mode: {r['mode']} ---")
+    for i, p in enumerate(r["phases"], 1):
+        print(f" Phase {i}: {p['engines']:8s} ({p['n_engines']} engine(s), "
+              f"{p['thrust_N']/1000:6.1f} kN)")
+        print(f"   burn time        : {p['burn_time_s']/60:7.2f} min")
+        print(f"   propellant burned: {p['propellant_burned_kg']/1000:7.2f} t")
+        print(f"   mass start/end   : {p['m_start_kg']/1000:7.1f} / "
+              f"{p['m_end_kg']/1000:7.1f} t")
+        print(f"   accel start/end  : {p['accel_start_g']:7.3f} / "
+              f"{p['accel_end_g']:7.3f} g")
+        print(f"   delta-v          : {p['delta_v_m_s']:7.0f} m/s")
+        print(f"   jet power        : {p['jet_power_MW']:7.1f} MW")
+    print(f" Total ideal delta-v : {r['delta_v_km_s']:6.3f} km/s "
+          f"({r['delta_v_m_s']:.0f} m/s)")
+    print(f" Total burn time     : {r['total_burn_time_s']/60:6.2f} min")
+    print(f" Engine time (min)   : DRA engines {r['engine_minutes']['dra']:.1f}"
+          f" incl. TMI, dedicated {r['engine_minutes']['ded']:.1f}"
+          f"  (limit {r['engine_life_limit_min']:.0f})")
+    print(f" Within engine life  : {r['within_engine_life']}")
+    print()
+
+
 # ----------------------------------------------------------------------
-# Main Program: using NASA DRA 5.0-class numbers
+# Main Program: NASA DRA 5.0-class parameters, post-TMI abort
 # ----------------------------------------------------------------------
 
 if __name__ == "__main__":
 
+    # Isp: DRA 5.0 nominal ~900 s (~900-910 s) [1][3]
+    isp = 900.0                       # s
+
+    # Thrust per engine: 25 klbf Pewee-class [1][3]
+    thrust_per_engine = 25000.0 * LBF_TO_N   # N (~111.2 kN)
+
     # ------------------------------------------------------------------
-    # Main vehicle (DRA 5.0 crewed "Copernicus" MTV) at abort
+    # DRA 5.0 crewed vehicle immediately after TMI
     # ------------------------------------------------------------------
-    # Published [1]: IMLEO ~336.5 t = NTR stage ~138.1 t
-    #                + saddle truss / LH2 drop tank ~133.4 t
-    #                + crew payload ~65 t; ~178.4 t LH2 over 4 primary
-    #                burns; drop tank (~22 t dry, ~102.4 t LH2) jettisoned
-    #                after TMI.
-    # NOTE: crewed payload mass differs between DRA 5.0 papers (~65 t in
-    # [1], ~111 t in earlier cuts).
+    # Published [3]: IMLEO ~336.5 t (NTR stage ~138.1 t + saddle truss /
+    # drop tank ~133.4 t + crew payload ~65 t); ~178.4 t LH2 total;
+    # engine burn times ~55 / 14.5 / 9.7 min for TMI / MOC / TEI.
+    # Drop tank ~22 t dry, jettisoned after TMI [2][3].
     #
-    # ESTIMATE: post-TMI mass of roughly 195-200 t,
-    # back-calculated from IMLEO, an assumed TMI delta-v of ~3.8-4.0 km/s
-    # at Isp ~900 s, and drop-tank jettison. Includes the remaining
-    # core-stage LH2 for MOC/TEI.
-    # MET-dependent: mass steps down at drop-tank jettison (TMI) and
-    # again at Mars orbit capture (MOC).
-    m_sc = 200000.0          # kg   (ESTIMATE, ~200 t)
+    # ESTIMATE: LH2 used at TMI = 55 min x 3 engines x
+    # ~12.6 kg/s ~ 125 t, so ~54 t remains in the core stage (this
+    # matches the ~33 t MOC + ~22 t TEI implied by [3]).
+    # post-TMI mass ~ 336.5 - 125 - 22 ~ 190 t (includes the ~54 t LH2)
+    # MET-dependent: replace these two values to model other abort times.
+    m_dra_vehicle = 190000.0          # kg  (ESTIMATE)
+    dra_core_lh2  = 54000.0           # kg  (ESTIMATE)
 
     # ------------------------------------------------------------------
     # Dedicated NTP abort stage (design choices + DRA-scaled values)
     # ------------------------------------------------------------------
-    # Isp: DRA 5.0 nominal ~900 s (~900-910 s; ~906 s in crewed burn
-    # analysis) [1][2][3].
-    isp = 900.0              # s
-
-    # Thrust: one 25 klbf Pewee-class engine [1][2][3]
-    # (DRA core stage uses three, i.e. 75 klbf; abort stage engine count
-    #  is a design choice for this study.)
-    thrust = 25000.0 * LBF_TO_N   # N (~111.2 kN)
-
     # Dry mass: ESTIMATE. Built from:
-    #   engine: 25,000 lbf / T/W 3.43 [1][2] -> ~3.3 t
-    #   tank:   DRA drop tank ~22 t per ~102.4 t LH2 [1] scaled to
+    #   engine: 25,000 lbf / T/W 3.43 [1] -> ~3.3 t
+    #   tank:   DRA drop tank ~22 t per ~102.4 t LH2 [2] scaled to
     #           25 t LH2 -> ~5.4 t
     #   plus structure, shielding, RCS, contingency
-    m_stage_dry = 9000.0     # kg   (ESTIMATE, ~9 t)
+    m_ded_dry  = 9000.0               # kg  (ESTIMATE, ~9 t)
+    m_ded_prop = 25000.0              # kg  (design choice)
 
-    # Propellant load (LH2): your design choice
-    m_prop      = 25000.0    # kg
+    results = {}
+    for mode in MODES:
+        results[mode] = run_abort_burn(
+            mode,
+            isp,
+            m_dra_vehicle,
+            dra_core_lh2,
+            m_ded_dry,
+            m_ded_prop,
+            thrust_per_engine_N=thrust_per_engine,
+        )
 
-    results = delta_v(
-        isp,
-        m_sc,
-        m_stage_dry,
-        m_prop,
-        thrust
-    )
-
-    print("=== Bolt-on NTP Abort Stage Performance ===")
-    print(f"Spacecraft mass at abort     : {m_sc/1000:8.1f} t")
-    print(f"Abort stage dry mass         : {m_stage_dry/1000:8.1f} t")
-    print(f"Abort propellant load        : {m_prop/1000:8.1f} t")
+    r0 = results["dedicated"]
+    print("=== Post-TMI NTP Abort Options ===")
+    print(f"DRA vehicle mass (post-TMI)  : {m_dra_vehicle/1000:8.1f} t")
+    print(f"DRA core-stage LH2 remaining : {dra_core_lh2/1000:8.1f} t")
+    print(f"Dedicated stage dry / LH2    : {m_ded_dry/1000:8.1f} / "
+          f"{m_ded_prop/1000:.1f} t")
     print(f"Isp                          : {isp:8.1f} s")
-    print(f"Thrust                       : {thrust/1000:8.1f} kN")
-    print(f"Effective exhaust velocity   : {results['exhaust_velocity_m_s']:8.1f} m/s")
-    print(f"Initial total mass           : {results['m0_kg']/1000:8.1f} t")
-    print(f"Final total mass             : {results['mf_kg']/1000:8.1f} t")
-    print(f"Mass ratio                   : {results['mass_ratio']:8.3f}")
-    print(f"Ideal delta-v                : {results['delta_v_km_s']:8.3f} km/s")
-    print(f"                             : {results['delta_v_m_s']:8.0f} m/s")
-    print(f"Mass flow rate               : {results['m_dot_kg_s']:8.3f} kg/s")
-    print(f"Burn time                    : {results['burn_time_s']/60:8.2f} min")
-    print(f"Initial acceleration         : {results['acceleration_initial_m_s2']:8.3f} m/s²")
-    print(f"                             : {results['acceleration_initial_g']:8.3f} g")
-    print(f"Final acceleration           : {results['acceleration_final_m_s2']:8.3f} m/s²")
-    print(f"                             : {results['acceleration_final_g']:8.3f} g")
-    print(f"Jet power                    : {results['power_MW']:8.2f} MW")
-    print(f"                             : {results['power_W']:8.3e} W")
+    print(f"Effective exhaust velocity   : {r0['exhaust_velocity_m_s']:8.1f} m/s")
+    print(f"Mass flow per engine         : {r0['mdot_per_engine_kg_s']:8.3f} kg/s")
+    print()
+
+    for mode in MODES:
+        print_result(results[mode])
+
+    print("=== Summary ===")
+    print(f"{'Mode':12s} {'dv [km/s]':>10s} {'burn [min]':>11s} "
+          f"{'engine life ok':>15s}")
+    for mode in MODES:
+        r = results[mode]
+        print(f"{mode:12s} {r['delta_v_km_s']:10.3f} "
+              f"{r['total_burn_time_s']/60:11.1f} "
+              f"{str(r['within_engine_life']):>15s}")
