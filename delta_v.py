@@ -33,18 +33,17 @@ SOURCES (NASA Mars DRA 5.0 NTR numbers)
     Crewed vehicle: NTR stage ~138.1 t, saddle truss +
     drop tank ~133.4 t, ~178.4 t total LH2, 4 primary burns; engine burn
     times ~55 min TMI / ~14.5 min MOC / ~9.7 min TEI (~79.2 min total);
-    ~2 hr accumulated engine burn time demonstrated.
+    ~2 hr accumulated engine burn time required.
 [4] NTRS 20120012928, "Nuclear Thermal Rocket/Vehicle Characteristics and
     Sensitivity Trades for NASA's Mars DRA 5.0 Study."  Alternate
     configurations (e.g. ~180 t LH2, ~80 min total burn); shows
     variation between DRA 5.0 papers.
 [P] Primary reference: NASA-SP-2009-566, "Human Exploration of Mars
-    Design Reference Architecture 5.0," and its
+    Design Reference Architecture 5.0," and
     Addendum (NASA/SP-2009-566-ADD).
 """
 
 import math
-
 
 # Standard gravity
 G0 = 9.80665  # m/s^2
@@ -64,7 +63,6 @@ _STEPS = {
     "sequential": [["ded"], ["JETTISON"], ["dra"]],
     "all_four":   [["dra", "ded"], ["dra", "ded"]],  # 2nd step: survivor
 }
-
 
 def run_abort_burn(mode: str,
                    isp_s: float,
@@ -140,7 +138,10 @@ def run_abort_burn(mode: str,
         raise ValueError(f"mode must be one of {MODES}")
 
     ve = G0 * isp_s                       # effective exhaust velocity
+    print(f'Effective exhaust velocity: {ve:.3f} m/s')
     mdot_eng = thrust_per_engine_N / ve   # kg/s per engine
+    print(f'mdot per engine:            {mdot_eng:.3f} kg/s')
+    print(f'\n')
 
     groups = {
         "dra": {
@@ -159,41 +160,69 @@ def run_abort_burn(mode: str,
 
     # Mass carried and which groups are allowed to fire in this mode
     if mode == "dra":
+        print(f'Going down DRA loop...')
         m = m_dra_vehicle                       # no dedicated stage
+        print(f'DRA mass: {m:.3f} kg')
         groups["ded"]["prop"] = 0.0
         ded_inert = 0.0
     else:
+        print(f'Going down loop other than DRA loop...')
         m = m_dra_vehicle + m_ded_dry + m_ded_prop
+        print(f'Mass:                 {m:.3f} kg')
         ded_inert = m_ded_dry + m_ded_prop * ded_reserve_fraction
+        print(f'Dedicated inert mass: {ded_inert:.3f} kg')
     if mode == "dedicated":
+        print(f'Going down dedicated loop...')
         groups["dra"]["prop"] = 0.0             # DRA engines stay idle
+    
+    print(f'\n')
 
+    print(f'Setting initial parameters for {mode}...')
     m0_total = m
+    print(f'Initial mass:                    {m0_total:.3f} kg')
     engine_min = {"dra": tmi_burn_min_per_dra_engine, "ded": 0.0}
+    print(f'Setting initial engine run time: {engine_min} min')
     ded_attached = mode != "dra"
     phases = []
     total_dv = 0.0
+    print(f'Setting initial dv to:           {total_dv:.3f} m/s')
     total_time = 0.0
+    print(f'Setting initial time to:         {total_time:.3f} s')
+    print(f'\n')
 
     for step in _STEPS[mode]:
         if step == ["JETTISON"]:
+            print(f'Jettison performed because mode is {mode}!\n')
             if ded_attached:
                 m -= ded_inert                  # drop the empty stage
                 ded_attached = False
             continue
 
         active = [g for g in step if groups[g]["prop"] > 1e-9]
+        print(f'Active stages: {active}...\n')
         if not active:
             continue
 
         thrust = sum(groups[g]["thrust"] for g in active)
+        print(f'Performing delta m calculations for {mode}...')
+        print(f'Thrust:      {thrust:.3f} N')
         mdot = sum(groups[g]["mdot"] for g in active)
+        print(f'Mdot:        {mdot:.3f} kg')
         dt = min(groups[g]["prop"] / groups[g]["mdot"] for g in active)
+        print(f'Delta time:  {dt:.3f} s')
+        print(f'Delta time:  {dt/60:.3f} min')
         burned = mdot * dt
+        print(f'Mass burned: {burned:.3f} kg')
+        print(f'\n')
 
         m_start = m
+        print(f'Performing delta v calculations for {mode}...')
+        print(f'Starting mass: {m_start:.3f} kg')
         m_end = m - burned
+        print(f'Ending mass:   {m_end:.3f} kg')
         dv = ve * math.log(m_start / m_end)
+        print(f'Delta v:       {dv:.3f} m/s')
+        print(f'\n')
 
         for g in active:
             groups[g]["prop"] -= groups[g]["mdot"] * dt
@@ -214,13 +243,22 @@ def run_abort_burn(mode: str,
         })
 
         m = m_end
+        print(f'Final values:')
+        print(f'Ending mass:     {m:.3f} kg')
         total_dv += dv
+        print(f'Total delta v:   {total_dv:.3f} m/s')
         total_time += dt
+        print(f'Total burn time: {total_time:.3f} s')
+        print(f'Total burn time: {total_time/60:.3f} min')
+        print(f'\n')
 
     used = {"dra": mode in ("dra", "sequential", "all_four"),
             "ded": mode in ("dedicated", "sequential", "all_four")}
     life_ok = all(engine_min[g] <= engine_life_limit_min
                   for g in ("dra", "ded") if used[g])
+    
+    print(f'Calculations complete for mode {mode}!\n')
+    print(f'========================\n')
 
     return {
         "mode": mode,
@@ -268,7 +306,7 @@ def print_result(r: dict) -> None:
 if __name__ == "__main__":
 
     # Isp: DRA 5.0 nominal ~900 s (~900-910 s) [1][3]
-    isp = 900.0                       # s
+    isp = 900.0     # s
 
     # Thrust per engine: 25 klbf Pewee-class [1][3]
     thrust_per_engine = 25000.0 * LBF_TO_N   # N (~111.2 kN)
@@ -302,6 +340,7 @@ if __name__ == "__main__":
 
     results = {}
     for mode in MODES:
+        print(f'Running calculations for {mode}...')
         results[mode] = run_abort_burn(
             mode,
             isp,
