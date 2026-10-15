@@ -324,7 +324,7 @@ if __name__ == "__main__":
     # matches the ~33 t MOC + ~22 t TEI implied by [3]).
     # post-TMI mass ~ 336.5 - 125 - 22 ~ 190 t (includes the ~54 t LH2)
     # MET-dependent: replace these two values to model other abort times.
-    m_dra_vehicle = 190000.0          # kg  (ESTIMATE)
+    m_dra_vehicle = 181000.0          # kg  (ESTIMATE)
     dra_core_lh2  = 54000.0           # kg  (ESTIMATE)
 
     # ------------------------------------------------------------------
