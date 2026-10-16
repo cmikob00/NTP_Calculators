@@ -24,23 +24,41 @@ SOURCES (NASA Mars DRA 5.0 NTR numbers)
 ---------------------------------------
 [1] Borowski, McCurdy, Packard, "7-Launch NTR Space Transportation
     System for NASA's Mars Design Reference Architecture (DRA) 5.0,"
-    AIAA 2009-5308.  Three 25 klbf engines on the core stage; Isp ~900 s;
-    LH2 flow ~12.6 kg/s/engine; engine T/W ~3.43; cooldown propellant
-    margin 3 % of usable LH2.
-[2] NTRS 20120003776 (NASA version of the 7-Launch paper).  Drop tank
-    ~22 t dry / ~102.4 t LH2, jettisoned after TMI.
-[3] NTRS 20120009207 (DRA 5.0 NTR crewed-vehicle paper).
-    Crewed vehicle: NTR stage ~138.1 t, saddle truss +
-    drop tank ~133.4 t, ~178.4 t total LH2, 4 primary burns; engine burn
-    times ~55 min TMI / ~14.5 min MOC / ~9.7 min TEI (~79.2 min total);
-    ~2 hr accumulated engine burn time required.
-[4] NTRS 20120012928, "Nuclear Thermal Rocket/Vehicle Characteristics and
-    Sensitivity Trades for NASA's Mars DRA 5.0 Study."  Alternate
-    configurations (e.g. ~180 t LH2, ~80 min total burn); shows
-    variation between DRA 5.0 papers.
+    AIAA 2009-5308.  NOT consulted directly; cited as ref [4] inside [2].
+    Check it (and [P]) before quoting any number as coming from them.
+[2] Borowski, McCurdy, Packard, "Nuclear Thermal Propulsion (NTP): A
+    Proven Growth Technology for Human NEO / Mars Exploration Missions,"
+    NTRS 20120003776.  Primary source for the numbers used here:
+      - 3 x 25 klbf Pewee-class engines; Isp ~906 s (Tex ~2790 K,
+        composite fuel; range 906-941 s); LH2 flow ~12.5 kg/s/engine;
+        engine T/W ~3.50 (Table 2 / Sec. 2)
+      - propellant margins (Table 2): cooldown 3 % of usable LH2,
+        tank trapped residuals 2 % of tank capacity, 1 % performance
+        reserve on delta-v
+      - Copernicus crewed MTV: IMLEO ~336.5 t = NTR stage ~138.1 t
+        (tank capacity ~87.2 t LH2, incl. ~7.3 t external radiation
+        shield) + saddle truss / drop tank ~133.4 t (truss ~9 t, tank
+        ~22 t dry, ~102.4 t LH2) + crew payload ~65 t
+      - 4 primary burns use ~178.4 t LH2; burn times ~55 min TMI
+        (2-perigee) / ~14.5 min MOC / ~9.7 min TEI (~79.2 min total)
+      - drained drop tank is jettisoned after TMI; the saddle truss stays
+      - ~2 hr accumulated burn demonstrated on NRX-XE (27-28 start/stop
+        cycles; the paper gives both counts); composite fuel projected
+        ~2-6 hr at full power
+      - contingencies: 30 % on NTR system / composite structures,
+        15 % on tanks and heritage systems; ZBO cryocooler for the core
+        stage ~930 kg and ~8.9 kWe
+[3] Borowski, "Nuclear Thermal Rocket (NTR) Propulsion: A Proven
+    Game-Changing Technology for Future Human Exploration Missions,"
+    NTRS 20120009207.  Only the abstract was checked; no numbers in this
+    script are attributed to it.
+[4] Borowski, "Nuclear Thermal Rocket/Vehicle Characteristics and
+    Sensitivity Trades for NASA's Mars DRA 5.0 Study," NTRS 20120012928.
+    Only the abstract was checked (DRA 5.0 crewed MTV, ~6-7 month 1-way
+    transits); no numbers here are attributed to it.
 [P] Primary reference: NASA-SP-2009-566, "Human Exploration of Mars
-    Design Reference Architecture 5.0," and
-    Addendum (NASA/SP-2009-566-ADD).
+    Design Reference Architecture 5.0," and Addendum
+    (NASA/SP-2009-566-ADD).  NOT consulted; verify against it.
 """
 
 import math
@@ -74,7 +92,7 @@ def run_abort_burn(mode: str,
                    n_dra_engines: int = 3,
                    n_ded_engines: int = 1,
                    dra_reserve_fraction: float = 0.05,
-                   ded_reserve_fraction: float = 0.02,
+                   ded_reserve_fraction: float = 0.05,
                    tmi_burn_min_per_dra_engine: float = 55.0,
                    engine_life_limit_min: float = 120.0) -> dict:
     
@@ -112,22 +130,24 @@ def run_abort_burn(mode: str,
 
     dra_reserve_fraction : float
         Fraction of core-stage LH2 not burned (cooldown, reserve,
-        trapped residuals). DRA 5.0 carries a 3 % cooldown margin [1]
-        plus performance reserve and residuals [3]; the extra ~2 % here
-        is an ESTIMATE. Verify against [P].
+        trapped residuals). DRA 5.0 carries 3 % cooldown (of usable
+        LH2) plus 2 % trapped residuals (of tank capacity) [2]; the
+        sum, 5 %, is used here. The separate 1 % performance reserve on
+        delta-v is treated as usable in an abort, so it is not held back.
 
     ded_reserve_fraction : float
-        Same for the dedicated stage (default 2 %, as in the original
-        script). Cooldown would also apply to a real NTR; raise this
-        toward 0.05 for consistency with the DRA core stage.
+        Same for the dedicated stage (default 5 %, same basis as the
+        DRA core stage [2]).
 
     tmi_burn_min_per_dra_engine : float
         Engine time already used by each DRA engine at abort start
-        [min]; ~55 min for TMI [3].
+        [min]; ~55 min for the 2-perigee TMI burns [2].
 
     engine_life_limit_min : float
-        Accumulated burn-time limit per engine [min]; ~2 hr
-        demonstrated on the ground [3].
+        Accumulated burn-time limit per engine [min]. ~2 hr is the
+        DEMONSTRATED accumulated time on NRX-XE over 27-28 start/stop
+        cycles [2], not a certified life limit (composite fuel is
+        projected at ~2-6 hr at full power [2]).
 
     Returns
     -------
@@ -211,14 +231,14 @@ def run_abort_burn(mode: str,
         dt = min(groups[g]["prop"] / groups[g]["mdot"] for g in active)
         print(f'Delta time:  {dt:.3f} s')
         print(f'Delta time:  {dt/60:.3f} min')
-        burned = mdot * dt
-        print(f'Mass burned: {burned:.3f} kg')
+        mburned = mdot * dt
+        print(f'Mass burned: {mburned:.3f} kg')
         print(f'\n')
 
         m_start = m
         print(f'Performing delta v calculations for {mode}...')
         print(f'Starting mass: {m_start:.3f} kg')
-        m_end = m - burned
+        m_end = m - mburned
         print(f'Ending mass:   {m_end:.3f} kg')
         dv = ve * math.log(m_start / m_end)
         print(f'Delta v:       {dv:.3f} m/s')
@@ -233,7 +253,7 @@ def run_abort_burn(mode: str,
             "n_engines": sum(groups[g]["n"] for g in active),
             "thrust_N": thrust,
             "burn_time_s": dt,
-            "propellant_burned_kg": burned,
+            "propellant_burned_kg": mburned,
             "m_start_kg": m_start,
             "m_end_kg": m_end,
             "delta_v_m_s": dv,
@@ -305,37 +325,57 @@ def print_result(r: dict) -> None:
 
 if __name__ == "__main__":
 
-    # Isp: DRA 5.0 nominal ~900 s (~900-910 s) [1][3]
+    # Isp: DRA 5.0 baseline is ~906 s (composite fuel, Tex ~2790 K) [2];
+    # 900 s is used here as a rounded, slightly conservative value
+    # (~0.7 % lower exhaust velocity). Flow is then ~12.6 kg/s/engine
+    # vs. the published ~12.5 kg/s at 906 s.
     isp = 900.0     # s
 
-    # Thrust per engine: 25 klbf Pewee-class [1][3]
+    # Thrust per engine: 25 klbf Pewee-class [2]
     thrust_per_engine = 25000.0 * LBF_TO_N   # N (~111.2 kN)
 
     # ------------------------------------------------------------------
     # DRA 5.0 crewed vehicle immediately after TMI
     # ------------------------------------------------------------------
-    # Published [3]: IMLEO ~336.5 t (NTR stage ~138.1 t + saddle truss /
-    # drop tank ~133.4 t + crew payload ~65 t); ~178.4 t LH2 total;
-    # engine burn times ~55 / 14.5 / 9.7 min for TMI / MOC / TEI.
-    # Drop tank ~22 t dry, jettisoned after TMI [2][3].
+    # Published [2]: IMLEO ~336.5 t (NTR stage ~138.1 t + saddle truss /
+    # drop tank ~133.4 t + crew payload ~65 t); ~178.4 t LH2 used over
+    # 4 burns; burn times ~55 / 14.5 / 9.7 min for TMI / MOC / TEI.
+    # Drop tank ~22 t dry (jettisoned after TMI); saddle truss ~9 t stays.
     #
-    # ESTIMATE: LH2 used at TMI = 55 min x 3 engines x
-    # ~12.6 kg/s ~ 125 t, so ~54 t remains in the core stage (this
-    # matches the ~33 t MOC + ~22 t TEI implied by [3]).
-    # post-TMI mass ~ 336.5 - 125 - 22 ~ 190 t (includes the ~54 t LH2)
-    # MET-dependent: replace these two values to model other abort times.
-    m_dra_vehicle = 181000.0          # kg  (ESTIMATE)
-    dra_core_lh2  = 54000.0           # kg  (ESTIMATE)
+    # Dry mass after TMI (published components):
+    #   NTR stage 138.1 - 87.2 (LH2 capacity) = 50.9 t
+    #   + saddle truss 9 t + payload 65 t  ~ 125 t
+    # LH2 in the core stage after TMI (ESTIMATE):
+    #   loaded: 87.2 (stage) + 102.4 (drop tank) = 189.6 t
+    #   TMI burn: 55 min x 3 engines x 12.5 kg/s = 123.75 t, plus ~3 %
+    #   cooldown -> ~127.5 t
+    #   remaining ~62 t. (The ~54 t that MOC + TEI burn time implies,
+    #   24.2 min x 2.25 t/min, is burn propellant only; the tank also
+    #   holds margins/residuals.)
+    # post-TMI mass ~ 125 + 62 = 187 t. Cross-check:
+    #   336.5 - 127.5 - 22 = 187 t.
+    # MET-dependent only weakly (RCS propellant use, ~9 t total [2]);
+    # replace these two values to model other abort times.
+    m_dra_vehicle = 187000.0          # kg  (ESTIMATE)
+    dra_core_lh2  = 62000.0           # kg  (ESTIMATE)
 
     # ------------------------------------------------------------------
     # Dedicated NTP abort stage (design choices + DRA-scaled values)
     # ------------------------------------------------------------------
-    # Dry mass: ESTIMATE. Built from:
-    #   engine: 25,000 lbf / T/W 3.43 [1] -> ~3.3 t
-    #   tank:   DRA drop tank ~22 t per ~102.4 t LH2 [2] scaled to
-    #           25 t LH2 -> ~5.4 t
-    #   plus structure, shielding, RCS, contingency
-    m_ded_dry  = 9000.0               # kg  (ESTIMATE, ~9 t)
+    # Dry mass: ESTIMATE, bottom-up (NOT from a published source; run a
+    # sensitivity sweep, ~9-15 t changes delta-v by < ~140 m/s):
+    #   engine:    25,000 lbf / T/W 3.50 [2]                    ~3.2 t
+    #   tank:      DRA drop tank ~22 t per ~102.4 t LH2 [2]
+    #              scaled linearly to 25 t LH2 (likely optimistic
+    #              for a small tank)                             ~5.4 t
+    #   shielding: DRA ~7.3 t external shield for 3 engines [2],
+    #              ~1/3 for one engine                           ~2.4 t
+    #   ZBO cryocooler / thermal protection (core stage: 930 kg [2])
+    #              scaled down; stage idles for months           ~0.5 t
+    #   structure, interstage, avionics, RCS                     ~1.5 t
+    #   total ~13 t. 30 % / 15 % DRA contingencies [2] are NOT yet
+    #   applied; add them for a conservative case.
+    m_ded_dry  = 3200.0 + 5400.0 + 2400.0 + 500.0 + 1500.0   # kg (~13 t)
     m_ded_prop = 25000.0              # kg  (design choice)
 
     results = {}
