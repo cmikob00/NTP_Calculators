@@ -1,0 +1,93 @@
+{
+  "NERVA-style HEU": {
+    "beta_total": 0.0065,
+    "Lambda_s": 0.0001,
+    "Lambda_range_s": [
+      3e-05,
+      0.0003
+    ],
+    "f238": 0.0,
+    "alpha_T_per_K": -1e-06,
+    "lambda_i": [
+      0.0124,
+      0.0305,
+      0.111,
+      0.301,
+      1.14,
+      3.01
+    ],
+    "beta_i": [
+      0.0002145,
+      0.0014234999999999999,
+      0.001274,
+      0.0025675,
+      0.0007475,
+      0.000273
+    ],
+    "provenance": {
+      "delayed groups": "VERIFIED: U-235 thermal (Keepin 1957 via Hetrick 1993)",
+      "f238": "ESTIMATE: ~0 for HEU; not from a source",
+      "Lambda": "ESTIMATE: 1e-4 s, band 3e-5..3e-4 s; replace with adjoint-weighted value",
+      "alpha_T": "ESTIMATE: -1e-6 /K illustrative"
+    }
+  },
+  "Simplified HALEU": {
+    "beta_total": 0.006914999999999999,
+    "Lambda_s": 8e-05,
+    "Lambda_range_s": [
+      1e-06,
+      0.0003
+    ],
+    "f238": 0.05,
+    "alpha_T_per_K": -1.5e-06,
+    "lambda_i": [
+      0.0124,
+      0.0132,
+      0.0305,
+      0.0321,
+      0.111,
+      0.139,
+      0.301,
+      0.358,
+      1.14,
+      1.41,
+      3.01,
+      4.02
+    ],
+    "beta_i": [
+      0.00020377499999999998,
+      9.620000000000001e-06,
+      0.0013523249999999997,
+      0.00010138000000000002,
+      0.0012102999999999999,
+      0.00011988000000000002,
+      0.002439125,
+      0.00028712000000000003,
+      0.0007101249999999999,
+      0.00016650000000000004,
+      0.00025935,
+      5.550000000000001e-05
+    ],
+    "provenance": {
+      "delayed groups": "PARTIAL: U-235 thermal verified; U-238 fast groups unchecked",
+      "f238": "ESTIMATE: 0.05 assumed",
+      "Lambda": "ESTIMATE: 8e-5 s, band 1e-6..3e-4 s",
+      "alpha_T": "ESTIMATE: -1.5e-6 /K illustrative"
+    }
+  },
+  "delayed_data_sources": {
+    "U-235 thermal": {
+      "status": "VERIFIED (vs. Hetrick 1993 tabulation of Keepin data)",
+      "source": "Keepin, Wimett & Zeigler, Phys. Rev. 107, 1044 (1957); Hetrick (1993)"
+    },
+    "U-238 fast": {
+      "status": "PARTIAL (yield verified; group constants unchecked)",
+      "source": "Keepin, Wimett & Zeigler, Phys. Rev. 107, 1044 (1957)"
+    }
+  },
+  "thermal_model_ESTIMATES": {
+    "P_INIT_W": 1000000.0,
+    "C_TH_J_per_K": 1500000.0,
+    "H_COOL_W_per_K": 200000.0
+  }
+}
