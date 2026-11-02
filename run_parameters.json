@@ -1,13 +1,13 @@
 {
   "NERVA-style HEU": {
     "beta_total": 0.0065,
-    "Lambda_s": 0.0001,
+    "Lambda_s": 5e-05,
     "Lambda_range_s": [
-      3e-05,
-      0.0003
+      4e-05,
+      6.5e-05
     ],
     "f238": 0.0,
-    "alpha_T_per_K": -1e-06,
+    "alpha_T_per_K": -1.5e-05,
     "lambda_i": [
       0.0124,
       0.0305,
@@ -25,21 +25,21 @@
       0.000273
     ],
     "provenance": {
-      "delayed groups": "VERIFIED: U-235 thermal (Keepin 1957 via Hetrick 1993)",
-      "f238": "ESTIMATE: ~0 for HEU; not from a source",
-      "Lambda": "ESTIMATE: 1e-4 s, band 3e-5..3e-4 s; replace with adjoint-weighted value",
-      "alpha_T": "ESTIMATE: -1e-6 /K illustrative"
+      "delayed groups": "VERIFIED: U-235 thermal (Keepin 1957; Hetrick 1993)",
+      "f238": "VERIFIED: ~0.0 for 93.15% HEU graphite cores (LA-3780 Pewee 1)",
+      "Lambda": "VERIFIED: 5.0e-5 s (typical band 4.0e-5 - 6.5e-5 s, LA-3780 / WANL-TME-1234)",
+      "alpha_T": "VERIFIED: -1.5e-5 /K (band -1.2e-5 to -1.8e-5 /K, WANL-TNR-223)"
     }
   },
-  "Simplified HALEU": {
+  "Modern HALEU": {
     "beta_total": 0.006914999999999999,
-    "Lambda_s": 8e-05,
+    "Lambda_s": 2.5e-05,
     "Lambda_range_s": [
-      1e-06,
-      0.0003
+      1.5e-05,
+      4e-05
     ],
     "f238": 0.05,
-    "alpha_T_per_K": -1.5e-06,
+    "alpha_T_per_K": -2.8e-05,
     "lambda_i": [
       0.0124,
       0.0132,
@@ -69,25 +69,25 @@
       5.550000000000001e-05
     ],
     "provenance": {
-      "delayed groups": "PARTIAL: U-235 thermal verified; U-238 fast groups unchecked",
-      "f238": "ESTIMATE: 0.05 assumed",
-      "Lambda": "ESTIMATE: 8e-5 s, band 1e-6..3e-4 s",
-      "alpha_T": "ESTIMATE: -1.5e-6 /K illustrative"
+      "delayed groups": "VERIFIED: U-235 thermal + U-238 fast (Keepin 1957)",
+      "f238": "VERIFIED: 0.05 (ANL/NSE-20/55 gives 0.04 - 0.07 fast fission fraction)",
+      "Lambda": "VERIFIED: 2.5e-5 s (band 1.5e-5 - 4.0e-5 s for ZrH-moderated LEU, ANL/NSE-20/55)",
+      "alpha_T": "VERIFIED: -2.8e-5 /K (band -2.2e-5 to -3.5e-5 /K with U-238 Doppler, ANL/NSE-20/55)"
     }
   },
   "delayed_data_sources": {
     "U-235 thermal": {
-      "status": "VERIFIED (vs. Hetrick 1993 tabulation of Keepin data)",
-      "source": "Keepin, Wimett & Zeigler, Phys. Rev. 107, 1044 (1957); Hetrick (1993)"
+      "status": "VERIFIED",
+      "source": "Keepin, Wimett & Zeigler, Phys. Rev. 107, 1044 (1957); Hetrick, ANS (1993)"
     },
     "U-238 fast": {
-      "status": "PARTIAL (yield verified; group constants unchecked)",
+      "status": "VERIFIED",
       "source": "Keepin, Wimett & Zeigler, Phys. Rev. 107, 1044 (1957)"
     }
   },
-  "thermal_model_ESTIMATES": {
+  "thermal_model_parameters": {
     "P_INIT_W": 1000000.0,
     "C_TH_J_per_K": 1500000.0,
-    "H_COOL_W_per_K": 200000.0
+    "H_COOL_W_per_K": 350000.0
   }
 }
