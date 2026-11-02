@@ -75,14 +75,14 @@ R_MARS = 1.523679 * AU
 TMI_VINF = 3.940              # km/s
 DRA_OUTBOUND_DAYS = 190.0     # days
 
-EMERGENCY_DAYS = [30, 60, 90, 120, 150, 180]
+EMERGENCY_DAYS = [5, 10, 15, 20, 25, 30, 60, 90, 120, 150, 180]
 
 # Return-duration search window (days after the abort burn).
 # Kept at the original 150-350 d "quick return" window. Widen RETURN_MAX_DAYS
 # to ~800 to allow ~2-year returns, which are cheaper in delta-v but are
 # probably not acceptable for a crew (see notes in the header).
-RETURN_MIN_DAYS = 150
-RETURN_MAX_DAYS = 350
+RETURN_MIN_DAYS = 1    # 150 default
+RETURN_MAX_DAYS = 400  # 350 default
 RETURN_STEP_DAYS = 2
 
 # Optional cap on Earth-arrival V-infinity (km/s) to reject solutions that
