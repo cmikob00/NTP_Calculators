@@ -1,45 +1,14 @@
 {
-  "NERVA-style HEU": {
-    "beta_total": 0.0065,
+  "HEU": {
+    "beta_total": 0.006583,
     "Lambda_s": 5e-05,
     "Lambda_range_s": [
-      4e-05,
-      6.5e-05
+      3e-05,
+      7e-05
     ],
-    "f238": 0.0,
-    "alpha_T_per_K": -1.5e-05,
-    "lambda_i": [
-      0.0124,
-      0.0305,
-      0.111,
-      0.301,
-      1.14,
-      3.01
-    ],
-    "beta_i": [
-      0.0002145,
-      0.0014234999999999999,
-      0.001274,
-      0.0025675,
-      0.0007475,
-      0.000273
-    ],
-    "provenance": {
-      "delayed groups": "VERIFIED: U-235 thermal (Keepin 1957; Hetrick 1993)",
-      "f238": "VERIFIED: ~0.0 for 93.15% HEU graphite cores (LA-3780 Pewee 1)",
-      "Lambda": "VERIFIED: 5.0e-5 s (typical band 4.0e-5 - 6.5e-5 s, LA-3780 / WANL-TME-1234)",
-      "alpha_T": "VERIFIED: -1.5e-5 /K (band -1.2e-5 to -1.8e-5 /K, WANL-TNR-223)"
-    }
-  },
-  "Modern HALEU": {
-    "beta_total": 0.006914999999999999,
-    "Lambda_s": 2.5e-05,
-    "Lambda_range_s": [
-      1.5e-05,
-      4e-05
-    ],
-    "f238": 0.05,
-    "alpha_T_per_K": -2.8e-05,
+    "f238": 0.01,
+    "alpha_T_per_K": -1.2e-05,
+    "c_th_J_per_K": 808225.0,
     "lambda_i": [
       0.0124,
       0.0132,
@@ -55,39 +24,90 @@
       4.02
     ],
     "beta_i": [
-      0.00020377499999999998,
-      9.620000000000001e-06,
-      0.0013523249999999997,
-      0.00010138000000000002,
-      0.0012102999999999999,
-      0.00011988000000000002,
-      0.002439125,
-      0.00028712000000000003,
-      0.0007101249999999999,
-      0.00016650000000000004,
-      0.00025935,
-      5.550000000000001e-05
+      0.000212355,
+      1.924e-06,
+      0.001409265,
+      2.0276000000000004e-05,
+      0.00126126,
+      2.3976000000000006e-05,
+      0.002541825,
+      5.742400000000001e-05,
+      0.000740025,
+      3.33e-05,
+      0.00027027,
+      1.11e-05
     ],
     "provenance": {
-      "delayed groups": "VERIFIED: U-235 thermal + U-238 fast (Keepin 1957)",
-      "f238": "VERIFIED: 0.05 (ANL/NSE-20/55 gives 0.04 - 0.07 fast fission fraction)",
-      "Lambda": "VERIFIED: 2.5e-5 s (band 1.5e-5 - 4.0e-5 s for ZrH-moderated LEU, ANL/NSE-20/55)",
-      "alpha_T": "VERIFIED: -2.8e-5 /K (band -2.2e-5 to -3.5e-5 /K with U-238 Doppler, ANL/NSE-20/55)"
+      "delayed groups": "LITERATURE: U-235 thermal (+1% U-238 fast), Keepin 1957",
+      "f238": "DESIGN-STUDY: 0.01, ANL/NSE-20/55 (1% of neutron losses -> U-238 fission)",
+      "Lambda": "ASSUMED: 5.0e-5 s (band 4.0e-5 - 6.5e-5 s; no source located)",
+      "alpha_T": "DESIGN-STUDY: -1.20e-5 /K, ANL/NSE-20/55 Doppler (100->1000 K); not total coeff.",
+      "c_th": "DERIVED: 1469.5 kg ANL cercer mass x 550 J/kg/K (cp approximate)"
+    }
+  },
+  "HALEU": {
+    "beta_total": 0.007164000000000001,
+    "Lambda_s": 5e-05,
+    "Lambda_range_s": [
+      3e-05,
+      7e-05
+    ],
+    "f238": 0.08,
+    "alpha_T_per_K": -3.17e-05,
+    "c_th_J_per_K": 867020.0,
+    "lambda_i": [
+      0.0124,
+      0.0132,
+      0.0305,
+      0.0321,
+      0.111,
+      0.139,
+      0.301,
+      0.358,
+      1.14,
+      1.41,
+      3.01,
+      4.02
+    ],
+    "beta_i": [
+      0.00019734,
+      1.5392e-05,
+      0.00130962,
+      0.00016220800000000003,
+      0.00117208,
+      0.00019180800000000004,
+      0.0023621000000000002,
+      0.0004593920000000001,
+      0.0006877000000000001,
+      0.0002664,
+      0.00025116,
+      8.88e-05
+    ],
+    "provenance": {
+      "delayed groups": "LITERATURE: U-235 thermal + U-238 fast (8%), Keepin 1957",
+      "f238": "DESIGN-STUDY: 0.08, ANL/NSE-20/55 (8% of neutron losses -> U-238 fission)",
+      "Lambda": "ASSUMED: 2.5e-5 s (band 1.5e-5 - 4.0e-5 s; no source located)",
+      "alpha_T": "DESIGN-STUDY: -3.17e-5 /K, ANL/NSE-20/55 Doppler (100->1000 K); not total coeff.",
+      "c_th": "DERIVED: 1576.4 kg ANL cercer mass x 550 J/kg/K (cp approximate)"
     }
   },
   "delayed_data_sources": {
     "U-235 thermal": {
-      "status": "VERIFIED",
-      "source": "Keepin, Wimett & Zeigler, Phys. Rev. 107, 1044 (1957); Hetrick, ANS (1993)"
+      "status": "LITERATURE",
+      "source": "Keepin, Wimett & Zeigler, Phys. Rev. 107, 1044 (1957); Hetrick (1971/1993)"
     },
     "U-238 fast": {
-      "status": "VERIFIED",
+      "status": "LITERATURE",
       "source": "Keepin, Wimett & Zeigler, Phys. Rev. 107, 1044 (1957)"
     }
   },
   "thermal_model_parameters": {
     "P_INIT_W": 1000000.0,
-    "C_TH_J_per_K": 1500000.0,
-    "H_COOL_W_per_K": 350000.0
-  }
+    "P_INIT_status": "ASSUMED",
+    "H_COOL_W_per_K": 225000.0,
+    "H_COOL_status": "DERIVED: 540 MW / (2700-300 K), ANL/NSE-20/55; constant-H assumption",
+    "CP_FUEL_J_per_kg_K": 550.0,
+    "CP_FUEL_status": "ASSUMED (approximate ZrC-matrix value; verify)"
+  },
+  "primary_design_source": "Nelson, Kasam-Griffith, Atz, Heidet, 'Performance of HALEU and HEU-Fueled Nuclear Thermal Propulsion Reactors', ANL/NSE-20/55, Sept 2020"
 }
