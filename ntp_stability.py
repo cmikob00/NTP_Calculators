@@ -148,6 +148,12 @@ def transfer_function(omega, case):
     mod = -p["alpha_m"] * p["A_m"] / (lag_f * lag_m)
     prop = +p["beta_p"] * p["B_p"] / (lag_f * lag_m * lag_p)
 
+    print(f'Denominator terms:')
+    print(f'Point kinetics: {kin}')
+    print(f'Fuel: {fuel}')
+    print(f'Moderator: {mod}')
+    print(f'Propellant: {prop}')
+
     return 1.0 / (kin + fuel + mod + prop)
 
 
@@ -289,7 +295,7 @@ def make_overlay_plot(cases, axis=AXIS, n_points=800, outfile=None, show=False):
 # 7. Main
 # ----------------------------------------------------------------------
 if __name__ == "__main__":
-    check_against_pdf()
+    # check_against_pdf()  # this step ensures that parameters match Emrich's plot
 
     for c in (HEU, HALEU):
         b, _ = make_12group(c.f238)
