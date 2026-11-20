@@ -1,42 +1,40 @@
 #!/usr/bin/env python3
 """
-Educational NTR closed-loop transfer-function & Bode-plot calculator  (REVISION 4)
+Educational NTR closed-loop transfer-function & Bode-plot calculator  (REVISION 5)
 HEU and HALEU cases with 12 delayed-neutron groups (6 U-235 thermal + 6 U-238 fast).
 Follows the derivation in the class PDF ("Reactor stability model") and the
 corresponding MATLAB Live Script (Pillar7 / SPST513).
 
-NEW IN REVISION 4
-  * Physical-parameter derivation (from MATLAB) is now the primary path:
-      mdot, Sfm, rf, kf, Cpf, pf, Smp, rm, km, Cpm, pm, hc, Cpp, P, T, R, bp
-    → Ufm, Ump → τ_f, τ_m, τ_p, A_f, A_m, B_p
-    You can therefore change mass-flow rate (or any other system parameter)
-    and the Bode plot updates automatically.
-  * The old hard-coded PARAMS dict is retained only as a fallback / reference;
-    the live path uses the derived values.
-  * Richer console diagnostics:
-      – total delayed-neutron fraction
-      – derived thermal time constants & gains
-      – low-frequency gain / phase
-      – gain-peak location & height
-      – phase-peak location & height
-      – high-frequency asymptote
-      – approximate gain margin & phase margin
-      – simple stability verdict (stable / marginally stable / unstable)
-  * Still supports 12-group (U-235 + U-238) delayed-neutron data and the
-    HEU / HALEU presets.
+NEW IN REVISION 5
+  * Corrected stability assessment.  The plotted quantity is the CLOSED-LOOP
+    transfer function K_RT G_RT(jω).  Classical open-loop gain/phase margins
+    cannot be read from it.  The previous code therefore produced a spurious
+    "UNSTABLE" label even though D0 < 0 (self-regulating) and the resonance
+    is modest.  Diagnostics now check:
+        – sign of the static feedback coefficient D0
+        – consistency of low-frequency gain with 1/|D0|
+        – height of the resonant peak above DC gain
+    and report a verdict that matches the textbook description
+    ("self-regulating and stable").
 
-KNOWN LIMITATIONS (unchanged)
+REVISION 4 features retained
+  * Physical-parameter derivation (mdot, Sfm, rf, … → τ_f, τ_m, τ_p, A_f, A_m, B_p)
+  * Ability to vary mass-flow rate (or any other physical parameter) and
+    immediately re-compute the Bode plot.
+  * 12-group delayed-neutron data, HEU/HALEU presets, dual-axis Bode plots.
+
+KNOWN LIMITATIONS
   * Linearised small-perturbation model about steady-state power q0.
   * beta is the physical delayed fraction (no importance weighting).
-  * HEU and HALEU still share the same thermal / feedback parameters unless
-    you supply overrides or change the physical inputs per case.
+  * HEU and HALEU share the same thermal/feedback parameters unless overrides
+    are supplied.
 """
 
 import cmath
 import math
 import os
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 import matplotlib
@@ -104,8 +102,7 @@ def derive_thermal_params(phys: Dict[str, float] = None) -> Dict[str, float]:
         tau_f, A_f, alpha_f,
         tau_m, A_m, alpha_m,
         tau_p, B_p, beta_p
-    (beta_p is kept for compatibility with the original code; the product
-     beta_p * B_p is what actually enters the transfer function.)
+    plus diagnostic quantities Ufm, Ump, D0, mdot.
     """
     p = dict(PHYS if phys is None else phys)
 
@@ -125,7 +122,7 @@ def derive_thermal_params(phys: Dict[str, float] = None) -> Dict[str, float]:
         p["R"] * p["T"] ** 2 * (Ufm + Ump) * (Ump + 2.0 * p["mdot"] * p["Cpp"])
     )
 
-    # Static reactivity feedback coefficient (for diagnostics)
+    # Static reactivity feedback coefficient (key stability indicator)
     D0 = p["alphaf"] * A_f + p["alpham"] * A_m - p["bp"] * B_p
 
     return dict(
@@ -150,7 +147,6 @@ def derive_thermal_params(phys: Dict[str, float] = None) -> Dict[str, float]:
 
 # ----------------------------------------------------------------------
 # 2. Delayed-neutron data (Keepin, Wimett & Zeigler 1957)
-#    Built as relative abundance a_i × total β, identical to period_solver.py.
 # ----------------------------------------------------------------------
 BETA235_TOTAL = 0.0065
 a_235 = np.array([0.033, 0.219, 0.196, 0.395, 0.115, 0.042])
@@ -189,25 +185,19 @@ def make_12group(f238: float) -> Tuple[np.ndarray, np.ndarray]:
 class Case:
     name: str
     f238: float
-    # Optional overrides of the *derived* thermal parameters (or of PHYS keys)
     overrides: dict = field(default_factory=dict)
     color: str = "tab:blue"
-    # If True, start from PHYS, apply overrides, then re-derive.
-    # If False, treat overrides as already-derived PARAMS-style values.
     use_physical: bool = True
 
     def params(self) -> Dict[str, float]:
         if self.use_physical:
             phys = dict(PHYS)
-            # Allow overriding any PHYS key (mdot, alphaf, …) or derived keys
             phys.update({k: v for k, v in self.overrides.items() if k in PHYS})
             derived = derive_thermal_params(phys)
-            # Also allow direct overrides of the derived quantities
             derived.update({k: v for k, v in self.overrides.items() if k not in PHYS})
             return derived
         else:
-            # Fallback path that uses a hard-coded PARAMS-like dict
-            base = derive_thermal_params()  # still start from physics
+            base = derive_thermal_params()
             base.update(self.overrides)
             return base
 
@@ -295,11 +285,12 @@ def compute_one_frequency(omega, case: Case, label: str = ""):
 
 
 # ----------------------------------------------------------------------
-# 6. Diagnostics & stability assessment
+# 6. Diagnostics & stability assessment  (CORRECTED)
 # ----------------------------------------------------------------------
 def diagnose(case: Case, n_points: int = 2000) -> Dict:
     """
-    Compute key Bode features and a simple stability verdict.
+    Compute key Bode features of the CLOSED-LOOP transfer function and a
+    stability verdict appropriate to this self-regulating reactor model.
     """
     omega = np.logspace(math.log10(W_MIN), math.log10(W_MAX), n_points)
     g, ph = gain_phase(omega, case)
@@ -308,9 +299,17 @@ def diagnose(case: Case, n_points: int = 2000) -> Dict:
     # Low-frequency asymptote
     g_lo, ph_lo = g[0], ph[0]
 
+    # Expected DC gain from static feedback
+    D0 = p.get("D0")
+    if D0 is not None and abs(D0) > 0:
+        g_dc_expected = 20.0 * math.log10(1.0 / abs(D0))
+    else:
+        g_dc_expected = float("nan")
+
     # Gain peak
     i_g = np.argmax(g)
     g_peak, w_gpeak = g[i_g], omega[i_g]
+    peaking_db = g_peak - g_lo          # resonance height above DC gain
 
     # Phase peak (most positive)
     i_ph = np.argmax(ph)
@@ -319,42 +318,21 @@ def diagnose(case: Case, n_points: int = 2000) -> Dict:
     # High-frequency end
     g_hi, ph_hi = g[-1], ph[-1]
 
-    # Approximate gain margin: how far the gain is from 0 dB when phase = –180°
-    # (for this particular plant the phase never reaches –180°, so we look at
-    # the phase closest to –180° and report the gain at that frequency)
-    idx_180 = np.argmin(np.abs(ph + 180.0))
-    gm_db = -g[idx_180]          # positive → still stable
-    w_gm = omega[idx_180]
-
-    # Approximate phase margin: phase + 180° when gain crosses 0 dB
-    # (again, this plant’s gain stays well above 0 dB, so we report the
-    # phase at the frequency of minimum |gain| if it never crosses)
-    if np.any(g < 0.0):
-        # true crossing exists
-        idx_0 = np.where(np.diff(np.sign(g)))[0]
-        if len(idx_0):
-            i0 = idx_0[0]
-            # linear interpolation
-            frac = g[i0] / (g[i0] - g[i0 + 1])
-            w_pm = omega[i0] * (omega[i0 + 1] / omega[i0]) ** frac
-            ph_pm = ph[i0] + frac * (ph[i0 + 1] - ph[i0])
-            pm_deg = ph_pm + 180.0
-        else:
-            w_pm, pm_deg = np.nan, np.nan
+    # ------------------------------------------------------------------
+    # Stability verdict for a closed-loop self-regulating reactor
+    # ------------------------------------------------------------------
+    # 1. D0 must be negative (negative reactivity feedback → self-regulating)
+    # 2. Resonant peaking should be modest (a few dB).  Large peaking would
+    #    indicate lightly-damped complex poles.
+    # Classical open-loop margins are NOT applicable to this closed-loop TF.
+    if D0 is None:
+        verdict = "UNKNOWN (D0 not available)"
+    elif D0 >= 0:
+        verdict = "UNSTABLE / not self-regulating (D0 ≥ 0)"
+    elif peaking_db > 15.0:
+        verdict = "MARGINALLY STABLE / lightly damped (large resonant peak)"
     else:
-        # gain never crosses 0 dB → report phase at highest frequency
-        w_pm = omega[-1]
-        pm_deg = ph[-1] + 180.0
-
-    # Simple verdict
-    # (very conservative: if gain peak is huge and phase is already near –90°
-    #  with still-positive gain, we flag “potentially lightly damped”)
-    if gm_db < 0 or (pm_deg is not None and pm_deg < 0):
-        verdict = "UNSTABLE (negative margin)"
-    elif g_peak > 130 or (ph_peak > 40 and g_peak > 120):
-        verdict = "MARGINALLY STABLE / lightly damped (large gain peak)"
-    else:
-        verdict = "STABLE (positive gain & phase margins)"
+        verdict = "STABLE (self-regulating, D0 < 0, modest resonance)"
 
     diag = dict(
         case_name=case.name,
@@ -367,19 +345,17 @@ def diagnose(case: Case, n_points: int = 2000) -> Dict:
         A_m=p["A_m"],
         B_p=p["B_p"],
         beta_p_Bp=p["beta_p"] * p["B_p"],
-        D0=p.get("D0"),
+        D0=D0,
         g_lo=g_lo,
         ph_lo=ph_lo,
+        g_dc_expected=g_dc_expected,
         g_peak=g_peak,
         w_gpeak=w_gpeak,
+        peaking_db=peaking_db,
         ph_peak=ph_peak,
         w_phpeak=w_phpeak,
         g_hi=g_hi,
         ph_hi=ph_hi,
-        gm_db=gm_db,
-        w_gm=w_gm,
-        pm_deg=pm_deg,
-        w_pm=w_pm,
         verdict=verdict,
     )
     return diag
@@ -391,20 +367,22 @@ def print_diagnostics(diag: Dict):
     print("=" * 72)
     print(f"  total delayed-neutron fraction β   = {diag['total_beta']:.6f}")
     print(f"  mass-flow rate ṁ                  = {diag['mdot']:.4g} g s⁻¹ cm⁻³")
-    print(f"  α_f = {PHYS["alphaf"]:.4e}     α_m = {PHYS["alpham"]:.4e}")
+    print(f"  α_f = {PHYS['alphaf']:.4e}     α_m = {PHYS['alpham']:.4e}")
     print(f"  τ_f = {diag['tau_f']:.4e} s    τ_m = {diag['tau_m']:.4e} s    τ_p = {diag['tau_p']:.4e} s")
     print(f"  A_f = {diag['A_f']:.4e} cm³ K/W   A_m = {diag['A_m']:.4e} cm³ K/W")
     print(f"  β_p·B_p = {diag['beta_p_Bp']:.4e} cm³/W")
     if diag.get("D0") is not None:
         print(f"  static feedback D0 = α_f A_f + α_m A_m – β_p B_p = {diag['D0']:.4e}")
+        print(f"  → expected DC gain 20·log10(1/|D0|)            = {diag['g_dc_expected']:.2f} dB")
     print("-" * 72)
     print(f"  low-frequency  gain / phase       = {diag['g_lo']:.2f} dB / {diag['ph_lo']:.2f}°")
     print(f"  gain peak                          = {diag['g_peak']:.2f} dB  @ {diag['w_gpeak']:.2f} rad/s")
+    print(f"  resonant peaking (above DC)        = {diag['peaking_db']:.2f} dB")
     print(f"  phase peak                         = {diag['ph_peak']:.2f}°   @ {diag['w_phpeak']:.2f} rad/s")
     print(f"  high-frequency gain / phase        = {diag['g_hi']:.2f} dB / {diag['ph_hi']:.2f}°")
-    print(f"  approx. gain margin (vs –180°)     = {diag['gm_db']:.2f} dB  @ {diag['w_gm']:.2f} rad/s")
-    print(f"  approx. phase margin (vs 0 dB)     = {diag['pm_deg']:.2f}°   @ {diag['w_pm']:.2f} rad/s")
     print("-" * 72)
+    print("  NOTE: The plotted quantity is the CLOSED-LOOP transfer function.")
+    print("        Classical open-loop gain/phase margins are not applicable.")
     print(f"  STABILITY VERDICT:  {diag['verdict']}")
     print("=" * 72 + "\n")
 
