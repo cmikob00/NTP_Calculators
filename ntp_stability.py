@@ -148,11 +148,11 @@ def transfer_function(omega, case):
     mod = -p["alpha_m"] * p["A_m"] / (lag_f * lag_m)
     prop = +p["beta_p"] * p["B_p"] / (lag_f * lag_m * lag_p)
 
-    print(f'Denominator terms:')
-    print(f'Point kinetics: {kin}')
-    print(f'Fuel: {fuel}')
-    print(f'Moderator: {mod}')
-    print(f'Propellant: {prop}')
+    # print(f'Denominator terms:')
+    # print(f'Point kinetics: {kin}')
+    # print(f'Fuel: {fuel}')
+    # print(f'Moderator: {mod}')
+    # print(f'Propellant: {prop}')
 
     return 1.0 / (kin + fuel + mod + prop)
 
